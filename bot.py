@@ -1,14 +1,22 @@
 import requests
+import os  # 新增：读取环境变量
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from config import TOKEN, CHAT_ID, LOTTERY_API_URL
+# 删除了报错的 config 导入
 from analyzer import *
 import telegram.error
+
+# 从 Railway 环境变量读取配置（和你填的变量名完全对应）
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+LOTTERY_API_URL = os.getenv("LOTTERY_API_URL")
+
 # 强制CMD打印日志
 print("[INFO] 机器人启动成功！")
 print("[INFO] 自动推送：5秒/次（稳定极速检测）")
 print("[INFO] 等待开奖数据中...")
 last_expect = None
+
 def get_data():
     try:
         res = requests.get(LOTTERY_API_URL, headers={"User-Agent":"Mozilla/5.0"}, timeout=10)
@@ -18,6 +26,7 @@ def get_data():
             return str(item["expect"]).strip(), int(item["openCode"].split(",")[-1])
     except Exception:
         return None, None
+
 def build_msg(expect, num):
     # 先算所有的预测项目
     one, three, six = zodiac_recommend()
@@ -66,6 +75,7 @@ def build_msg(expect, num):
 六肖：{get_battle('六肖')}
 """
     return msg, nums
+
 async def predict(update: Update, context: ContextTypes):
     expect, num = get_data()
     if expect:
@@ -73,6 +83,7 @@ async def predict(update: Update, context: ContextTypes):
         await update.message.reply_text(msg)
         formatted_nums = [f"{x:02d}" for x in nums]
         await update.message.reply_text(f"🎯 25个精选特码\n{','.join(formatted_nums)}")
+
 async def auto_push(context: ContextTypes.DEFAULT_TYPE):
     global last_expect
     try:
@@ -93,11 +104,13 @@ async def auto_push(context: ContextTypes.DEFAULT_TYPE):
         print(f"[WARNING] 网络超时，下次重试！")
     except Exception as e:
         print(f"[ERROR] 运行异常：{str(e)}")
+
 def main():
     application = ApplicationBuilder().token(TOKEN).build()
     application.add_handler(CommandHandler("predict", predict))
     # 5秒稳定极速检测
     application.job_queue.run_repeating(auto_push, interval=5, first=5)
     application.run_polling(drop_pending_updates=True)
+
 if __name__ == "__main__":
     main()
